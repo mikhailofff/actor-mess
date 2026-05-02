@@ -7,10 +7,24 @@
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
+get_role() ->
+    case application:get_env(actor_system, node_role) of
+        {ok, Role} -> Role;
+        _ -> worker
+    end.
+
 init([]) ->
-    Children =
-        case node() of
-            'node1@mikhailoff' ->
+    Role = get_role(),
+
+    BaseChildren = [
+        {worker_sup,
+         {worker_sup, start_link, []},
+         permanent, infinity, supervisor, [worker_sup]}
+    ],
+
+    CoreChildren =
+        case Role of
+            core ->
                 [
                     {job_queue,
                      {job_queue, start_link, []},
@@ -20,13 +34,10 @@ init([]) ->
                      {metrics_server, start_link, []},
                      permanent, 5000, worker, [metrics_server]}
                 ];
-            _ ->
+            worker ->
                 []
-        end ++
-        [
-            {worker_sup,
-             {worker_sup, start_link, []},
-             permanent, infinity, supervisor, [worker_sup]}
-        ],
+        end,
+
+    Children = CoreChildren ++ BaseChildren,
 
     {ok, {{one_for_one, 5, 10}, Children}}.
