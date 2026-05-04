@@ -16,32 +16,21 @@ get_role() ->
 init([]) ->
     Role = get_role(),
 
-    BaseChildren = [
-        {worker_sup,
-         {worker_sup, start_link, []},
-         permanent, infinity, supervisor, [worker_sup]}
-    ],
-
-    CoreChildren =
+    Children =
         case Role of
-            core ->
+            master ->
                 [
-                    {job_queue,
-                     {job_queue, start_link, []},
-                     permanent, 5000, worker, [job_queue]},
-
-                    {metrics_server,
-                     {metrics_server, start_link, []},
-                     permanent, 5000, worker, [metrics_server]},
-
-		    {dead_letter_queue,
-		     {dead_letter_queue, start_link, []},
-                     permanent, 5000, worker, [dead_letter_queue]}
+                    {master_sup,
+                     {master_sup, start_link, []},
+                     permanent, infinity, supervisor, [master_sup]}
                 ];
-            worker ->
-                []
-        end,
 
-    Children = CoreChildren ++ BaseChildren,
+            worker ->
+                [
+                    {worker_sup,
+                     {worker_sup, start_link, []},
+                     permanent, infinity, supervisor, [worker_sup]}
+                ]
+        end,
 
     {ok, {{one_for_one, 5, 10}, Children}}.
