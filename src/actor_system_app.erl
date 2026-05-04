@@ -10,6 +10,15 @@
 -export([start/2, stop/1]).
 
 start(_StartType, _StartArgs) ->
+    Role = application:get_env(actor_system, node_role, worker),
+
+    case Role of
+        master ->
+            mnesia_boot:init();
+        worker ->
+            ok
+    end,
+
     actor_system_sup:start_link().
 
 stop(_State) ->
