@@ -32,7 +32,11 @@ init([]) ->
 
                     {metrics_server,
                      {metrics_server, start_link, []},
-                     permanent, 5000, worker, [metrics_server]}
+                     permanent, 5000, worker, [metrics_server]},
+
+		    {dead_letter_queue,
+		     {dead_letter_queue, start_link, []},
+                     permanent, 5000, worker, [dead_letter_queue]}
                 ];
             worker ->
                 []

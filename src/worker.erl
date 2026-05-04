@@ -16,17 +16,20 @@ start_link() ->
 
 init([]) ->
     gen_server:cast({global, job_queue}, {worker_ready, self()}),
-	io:format("Worker started: ~p~n", [self()]),
+    io:format("Worker started: ~p~n", [self()]),
     {ok, #{}}.
 
 handle_cast({process, Id, Task, Retry}, State) ->
     Result = process_task(Task),
 
     case Result of
-        ok ->
-	    gen_server:cast({global, metrics_server}, success);
-        error ->
-	    gen_server:cast({global, metrics_server}, failure),
+        {ok, Data} ->
+            io:format("SUCCESS ~p~n", [Data]),
+            gen_server:cast({global, metrics_server}, success);
+
+        {error, Err} ->
+            io:format("FAIL ~p~n", [Err]),
+            gen_server:cast({global, metrics_server}, failure),
             retry_manager:retry(Id, Task, Retry)
     end,
 
@@ -42,15 +45,23 @@ handle_info(_Info, State) ->
 code_change(_, State, _) ->
     {ok, State}.
 
-process_task(crash) ->
-    exit(simulated_failure);
+ensure_http() ->
+    application:ensure_all_started(inets).
 
-process_task(fail) ->
-    error;
+process_task({http, Url}) ->
+    ensure_http(),
 
-process_task(_) ->
-    timer:sleep(300),
-    ok.
+    case httpc:request(get, {Url, []}, [{timeout, 2000}], []) of
+
+        {ok, {{_, Code, _}, Headers, Body}} when Code >= 200, Code < 300 ->
+            {ok, #{url => Url, status => Code, headers => Headers, body => Body}};
+
+        {ok, {{_, Code, _}, Headers, Body}} when Code >= 300 ->
+            {error, #{url => Url, status => Code, headers => Headers, body => Body}};
+
+        {error, Reason} ->
+            {error, #{url => Url, reason => Reason}}
+    end.
 
 terminate(Reason, _) ->
     io:format("Worker died: ~p~n", [Reason]).
