@@ -22,22 +22,10 @@ get_all() ->
     gen_server:call({global, ?MODULE}, get_all).
 
 clear() ->
-    mnesia:transaction(fun() ->
-        mnesia:clear_table(dlq)
-    end).
+    gen_server:call({global, ?MODULE}, clear).
 
 requeue_all() ->
-    {atomic, Items} =
-        mnesia:transaction(fun() ->
-            mnesia:foldl(fun(Row, Acc) -> [Row | Acc] end, [], dlq)
-        end),
-
-    lists:foreach(fun(#dlq{task = Task}) ->
-        job_queue:push(Task, 1),
-        io:format("Requeue DLQ task ~p~n", [Task])
-    end, Items),
-
-    clear().
+    gen_server:call({global, ?MODULE}, requeue_all).
 
 init([]) ->
     {ok, #state{}}.
@@ -58,10 +46,26 @@ handle_cast({push, Item}, State) ->
 
     {noreply, State}.
 
-handle_call(get_all, _From, State) ->
-    {atomic, Data} =
-        mnesia:transaction(fun() ->
-            mnesia:foldl(fun(Row, Acc) -> [Row | Acc] end, [], dlq)
-        end),
+handle_call(clear, _From, State) ->
+    Result = mnesia:clear_table(dlq),
+    {reply, Result, State};
 
+handle_call(requeue_all, _From, State) ->
+    Keys = mnesia:dirty_all_keys(dlq),
+    Items = lists:map(fun(Key) -> 
+        [Record] = mnesia:dirty_read({dlq, Key}),
+        Record
+    end, Keys),
+
+    mnesia:clear_table(dlq),
+
+    lists:foreach(fun(#dlq{task = Task}) ->
+        job_queue:push(Task, 1)
+    end, Items),
+    
+    {reply, ok, State};
+
+handle_call(get_all, _From, State) ->
+    Data = mnesia:dirty_match_object(#dlq{_ = '_'}),
     {reply, Data, State}.
+

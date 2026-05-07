@@ -21,7 +21,7 @@ push(Task, Retry) ->
     gen_server:cast({global, ?MODULE}, {push, Task, Retry}).
 
 push(Task) ->
-    gen_server:cast({global, ?MODULE}, {push, Task, 0}).
+    gen_server:cast({global, ?MODULE}, {push, Task, 1}).
 
 init([]) ->
     erlang:send_after(500, self(), tick),
